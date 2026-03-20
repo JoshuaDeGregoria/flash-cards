@@ -1,9 +1,9 @@
-import tkinter as tk
-from tkinter import ttk
-import json
-import urllib.request
-import threading
-import ssl
+import tkinter as tk        # the main GUI library — windows, buttons, canvas, etc.
+from tkinter import ttk    # "Themed Tkinter" — a submodule with nicer-looking widgets (we use it for the scrollbar)
+import json                # built-in Python library for reading/writing JSON data
+import urllib.request      # built-in library for downloading files from the internet
+import threading           # lets us run the download in the background so the window doesn't freeze
+import ssl                 # handles secure HTTPS connections; we use it to fix a Mac certificate issue
 
 # On some Macs, Python's SSL certificates aren't set up automatically.
 # This creates an unverified context so the download still works.
@@ -304,38 +304,34 @@ def draw_from_geojson(geojson):
         if not abbrev:
             continue    # skip territories like Puerto Rico
 
-        geom  = feature["geometry"]
-        gtype = geom["type"]         # "Polygon" or "MultiPolygon"
-        rings = geom["coordinates"]  # the actual coordinate data
+        geom = feature["geometry"]
 
         # GeoJSON Polygon:      coordinates = [outer_ring, hole, hole, ...]
         # GeoJSON MultiPolygon: coordinates = [[outer_ring, ...], [outer_ring, ...]]
         # Normalize both to a list of polygons so the loop below is the same
-        if gtype == "Polygon":
-            polygons = [rings]   # wrap single polygon in a list
+        if geom["type"] == "Polygon":
+            polygons = [geom["coordinates"]]   # wrap single polygon in a list
         else:
-            polygons = rings     # already a list of polygons
+            polygons = geom["coordinates"]     # already a list of polygons
 
-        # Pick the right projection and bounding box for this state
+        # Pick the right projection function for this state
         if abbrev == "AK":
-            proj_fn    = to_canvas_ak
-            # Only draw rings whose points fall inside the AK inset bounds
-            # (skips Aleutian islands that wrap past the -180° line)
-            in_bounds  = lambda lon, lat: AK_WEST <= lon <= AK_EAST and AK_SOUTH <= lat <= AK_NORTH
+            proj_fn = to_canvas_ak
         elif abbrev == "HI":
-            proj_fn    = to_canvas_hi
-            in_bounds  = lambda lon, lat: HI_WEST <= lon <= HI_EAST and HI_SOUTH <= lat <= HI_NORTH
+            proj_fn = to_canvas_hi
         else:
-            proj_fn    = to_canvas
-            in_bounds  = lambda lon, lat: True   # draw everything for the 48 states
+            proj_fn = to_canvas
 
         items = []
 
         for polygon in polygons:
             outer_ring = polygon[0]   # index 0 = exterior; the rest are holes (ignored)
 
-            # Skip this ring if none of its points fall inside our drawing area
-            if not any(in_bounds(c[0], c[1]) for c in outer_ring):
+            # AK and HI: skip rings whose points fall outside the inset box
+            # (this removes Aleutian islands that wrap past the -180° line)
+            if abbrev == "AK" and not any(AK_WEST <= c[0] <= AK_EAST for c in outer_ring):
+                continue
+            if abbrev == "HI" and not any(HI_WEST <= c[0] <= HI_EAST for c in outer_ring):
                 continue
 
             # Convert [lon, lat] pairs → flat [x1, y1, x2, y2, ...] pixel list
