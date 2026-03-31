@@ -6,8 +6,7 @@ This is where we can allocate tasks and share info and map out the project.
 
 
 I think the map will be hard to make look good:
- - The core problem is hand-coded coordinates with too few vertices (we cant make it supper huge). A possible fix is to fetch real US state boundary GeoJSON (built-in urllib + json, no pip installs) and draw the actual outlines. This may work if Bartsch is okay with us importing other features like JSON (I do not want to make it too complex but this might be simple enough). 
-
+ - Update I have made a map based on a real map and the coordinates take up 600+ lines of code but are supper accurate and self explanitory. 
 
 ## Project Instructions
 
