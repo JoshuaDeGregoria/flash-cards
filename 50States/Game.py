@@ -120,46 +120,81 @@ def load_rankings():
 # INSTRUCTIONS: Write a function to save rankings back to the local file.
 # INSTRUCTIONS: Save initials, elapsed session time, and final session score.
 # INSTRUCTIONS: Save only the top 10 records after sorting.
-
+def save_rankings(rankings):
+    with open(RANKINGS_FILE, 'w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow(["Initials", "Elapsed Time", "Score"])  # Header row
+        for record in rankings[:10]:  # Save only top 10 records
+            writer.writerow(record)
 
 # INSTRUCTIONS: Write a function to sort ranking records.
 # INSTRUCTIONS: Sort by score from highest to lowest.
 # INSTRUCTIONS: When scores are tied, rank the shorter elapsed time higher.
-
+def sort_rankings(rankings):
+    return sorted(rankings, key=lambda x: (-x[2], x[1]))  # Sort by score desc, then time asc  
 
 # INSTRUCTIONS: Write a function to validate the user's initials.
 # INSTRUCTIONS: Require exactly 3 characters before starting a session.
 # INSTRUCTIONS: Decide whether initials should be forced to uppercase and trimmed.
-
+def validate_initials(initials):
+    if len(initials) != 3:
+        return False
+    return initials.isalpha()  # Ensure all characters are letters
 
 # INSTRUCTIONS: Write a function to validate the flashcard settings.
 # INSTRUCTIONS: Require 1 to 3 prompt items.
 # INSTRUCTIONS: Require 1 to 3 answer items.
 # INSTRUCTIONS: Make sure prompt items and answer items do not overlap.
 # INSTRUCTIONS: Make sure the selected answer style only applies to the allowed answer fields.
+def validate_settings(prompt_fields, answer_fields, answer_modes):
+    if not (1 <= len(prompt_fields) <= 3):
+        return False, "Please select between 1 and 3 prompt items."
+    if not (1 <= len(answer_fields) <= 3):
+        return False, "Please select between 1 and 3 answer items."
+    if set(prompt_fields) & set(answer_fields):
+        return False, "Prompt items and answer items cannot overlap."
+    for field in answer_fields:
+        if field not in answer_modes:
+            return False, f"Answer mode for {field} is not specified."
+    return True, ""
 
 
 # INSTRUCTIONS: Write a function to calculate the score for one answer field.
 # INSTRUCTIONS: Award 2/6 point for each correct typed answer.
 # INSTRUCTIONS: Award 1/6 point for each correct drop-down or other multiple-choice answer.
 # INSTRUCTIONS: Treat map-click answers according to the scoring rule your group decides to follow.
-
+def calculate_score(field, user_answer, correct_answer, answer_mode):
+    if answer_mode == "text":
+        return TYPED_ANSWER_POINTS if user_answer.strip().lower() == correct_answer.strip().lower() else 0
+    elif answer_mode in {"dropdown", "multiple-choice"}:
+        return MULTIPLE_CHOICE_POINTS if user_answer == correct_answer else 0
+    elif answer_mode == "map-click":
+        # Implement map-click scoring logic based on your group's decision
+        pass
+    return 0
 
 # INSTRUCTIONS: Write a function to normalize typed answers before checking them.
 # INSTRUCTIONS: Strip extra spaces and handle capitalization consistently.
 # INSTRUCTIONS: Use this for name, initials, and capital comparisons where appropriate.
-
+def normalize_answer(answer):
+    return answer.strip().lower()   
 
 # INSTRUCTIONS: Write a function to build the main tkinter window.
 # INSTRUCTIONS: Create one root window only.
 # INSTRUCTIONS: Set the window title and any basic sizing rules.
 # INSTRUCTIONS: Prepare the app to switch between settings, flashcards, and rankings without opening extra windows.
-
+def create_main_window():
+    root = tk.Tk()
+    root.title("50 States Flash Cards")
+    root.geometry("800x600")  # Set a default size, adjust as needed
+    return root
 
 # INSTRUCTIONS: Write a helper function to clear, hide, or replace the current screen frame.
 # INSTRUCTIONS: Use this whenever the program moves from one screen to another.
 # INSTRUCTIONS: Keep screen switching simple so the interface stays stable.
-
+def clear_screen(root):
+    for widget in root.winfo_children():
+        widget.destroy()
 
 # INSTRUCTIONS: Write the function that builds the settings screen.
 # INSTRUCTIONS: Add the initials input.
@@ -167,7 +202,8 @@ def load_rankings():
 # INSTRUCTIONS: Add controls for selecting which different items must be answered.
 # INSTRUCTIONS: Add controls for choosing text-entry or drop-down mode for name, initials, and capital answers.
 # INSTRUCTIONS: Add buttons for starting the session and viewing rankings.
-
+def build_settings_screen(root):
+    pass  # Implement the settings screen layout and controls here
 
 # INSTRUCTIONS: On the settings screen, add clear labels that explain the rules.
 # INSTRUCTIONS: Explain that prompt and answer selections cannot overlap.
@@ -178,32 +214,35 @@ def load_rankings():
 # INSTRUCTIONS: Collect the chosen prompt fields, answer fields, answer modes, and user initials.
 # INSTRUCTIONS: Validate everything before starting the deck.
 # INSTRUCTIONS: Show a user-friendly error message if a setting is invalid.
-
+def read_settings_screen(root):
+    pass  # Implement the settings screen validation and data collection here   
 
 # INSTRUCTIONS: Write the function that starts a new flashcard session.
 # INSTRUCTIONS: Reset the score, timer, current card index, and any previous answer state.
 # INSTRUCTIONS: Build the 50-state deck.
 # INSTRUCTIONS: Shuffle the deck only if your group wants that behavior.
 # INSTRUCTIONS: Record the session start time.
-
+def start_session(root):
+    pass  # Implement the session initialization and deck preparation here
 
 # INSTRUCTIONS: Write the function that builds the flashcard screen.
 # INSTRUCTIONS: Show the current card number, the running score, and the time remaining.
 # INSTRUCTIONS: Add a place for prompt content.
 # INSTRUCTIONS: Add a place for answer widgets.
 # INSTRUCTIONS: Add submit, next, end-session, and navigation controls as needed.
-
+def build_flashcard_screen(root):
+    pass  # Implement the flashcard screen layout and controls here 
 
 # INSTRUCTIONS: Write the function that displays the current flashcard.
 # INSTRUCTIONS: Look up the current state in the state dictionary.
 # INSTRUCTIONS: Show the selected prompt items for that state.
 # INSTRUCTIONS: Build answer widgets that match the selected answer settings.
 # INSTRUCTIONS: Reset any old answer widgets from the previous card.
-
+def display_flashcard(root):
+    pass  # Implement the flashcard display and answer widget creation here
 
 # INSTRUCTIONS: Write the function that creates text-entry answer widgets.
 # INSTRUCTIONS: Use these for typed name, initials, and capital answers when the settings require text input.
-
 
 # INSTRUCTIONS: Write the function that creates drop-down answer widgets.
 # INSTRUCTIONS: Populate the options from the state data.
@@ -214,7 +253,7 @@ def load_rankings():
 # INSTRUCTIONS: Use the map data stored in the state dictionary.
 # INSTRUCTIONS: Make all state borders clear enough to see.
 # INSTRUCTIONS: Make it possible to redraw or recolor a state when needed.
-
+    
 
 # INSTRUCTIONS: Write the function that highlights the current state on the map.
 # INSTRUCTIONS: Fill the selected state with a noticeable color.
