@@ -879,9 +879,20 @@ root.resizable(True, True)
 nav_frame = tk.Frame(root, bg=BG_DARKER, pady=6)
 nav_frame.pack(fill="x")
 
-# Two content frames; only one is visible at a time
-map_frame   = tk.Frame(root, bg=BG_DARK)
-flash_frame = tk.Frame(root, bg=BG_DARK)
+# Container that holds the content frames — using grid so we can
+# reliably show/hide frames without the white-screen stacking bug.
+content_area = tk.Frame(root, bg=BG_DARK)
+content_area.pack(fill="both", expand=True)
+content_area.grid_rowconfigure(0, weight=1)
+content_area.grid_columnconfigure(0, weight=1)
+
+# Two content frames stacked in the same grid cell; only one is raised at a time
+map_frame   = tk.Frame(content_area, bg=BG_DARK)
+flash_frame = tk.Frame(content_area, bg=BG_DARK)
+
+# Place both frames in the same cell — they overlap, and we use tkraise to switch
+map_frame.grid(row=0, column=0, sticky="nsew")
+flash_frame.grid(row=0, column=0, sticky="nsew")
 
 # All nav buttons stored in a list so show_* functions can reset them all
 nav_buttons = []
@@ -889,20 +900,15 @@ nav_buttons = []
 
 def switch_tab(frame, btn, on_show=None):
     """
-    Hide every content frame, then show the requested one.
-    Always hides ALL frames first (including the target) to prevent
-    the white-screen bug caused by calling pack on an already-packed frame.
+    Raise the requested frame to the top of the grid stack.
+    Using grid + tkraise avoids the pack/unpack white-screen bug entirely.
     """
-    # Hide ALL content frames — including the one we're about to show
-    map_frame.pack_forget()
-    flash_frame.pack_forget()
-
     # Reset all nav button colors
     for b in nav_buttons:
         b.configure(bg=TILE_DEFAULT, fg=TEXT_LIGHT)
 
-    # Show the requested frame and highlight its button
-    frame.pack(fill="both", expand=True)
+    # Raise the requested frame to the front and highlight its button
+    frame.tkraise()
     btn.configure(bg=ACCENT_BLUE, fg=BG_DARK)
 
     # Run any extra setup (e.g. show_settings for flash cards)
@@ -1815,7 +1821,7 @@ def end_quiz():
     quiz_state["elapsed"] = round(elapsed, 1)
 
     # Restore the navigation bar
-    nav_frame.pack(fill="x", before=flash_frame)
+    nav_frame.pack(fill="x", before=content_area)
 
     # Switch to results view
     quiz_frame.pack_forget()
