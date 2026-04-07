@@ -1535,7 +1535,8 @@ def draw_mini_map(canvas, highlight_abbrev=None, clickable=False):
             llon = sum(p[0] for p in pts) / len(pts)
             llat = sum(p[1] for p in pts) / len(pts)
         lx, ly = mini_to_canvas(canvas, llon, llat)
-        canvas.create_text(lx, ly, text=abbrev, fill=TEXT_LIGHT,
+        label_fill = "#000000" if is_highlight else TEXT_LIGHT
+        canvas.create_text(lx, ly, text=abbrev, fill=label_fill,
                            font=("Helvetica", 6, "bold"))
 
     # ── Draw Alaska inset (bottom-left corner) ──────────────────────────────
@@ -1560,7 +1561,8 @@ def draw_mini_map(canvas, highlight_abbrev=None, clickable=False):
 
     ak_lx = ak_box_left + ak_box_w // 2
     ak_ly = ak_box_top + ak_box_h // 2
-    canvas.create_text(ak_lx, ak_ly, text="AK", fill=TEXT_LIGHT,
+    ak_label_fill = "#000000" if ak_is_highlight else TEXT_LIGHT
+    canvas.create_text(ak_lx, ak_ly, text="AK", fill=ak_label_fill,
                        font=("Helvetica", 6, "bold"))
 
     # ── Draw Hawaii inset (right of Alaska) ─────────────────────────────────
@@ -1589,7 +1591,8 @@ def draw_mini_map(canvas, highlight_abbrev=None, clickable=False):
 
     hi_lx = hi_box_left + hi_box_w // 2
     hi_ly = hi_box_top + hi_box_h // 2
-    canvas.create_text(hi_lx, hi_ly, text="HI", fill=TEXT_LIGHT,
+    hi_label_fill = "#000000" if hi_is_highlight else TEXT_LIGHT
+    canvas.create_text(hi_lx, hi_ly, text="HI", fill=hi_label_fill,
                        font=("Helvetica", 6, "bold"))
 
     # ── Raise all text above polygons ───────────────────────────────────────
