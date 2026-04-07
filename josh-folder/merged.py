@@ -2,7 +2,7 @@ import tkinter as tk        # the main GUI library — windows, buttons, canvas,
 from tkinter import ttk    # "Themed Tkinter" — a submodule with nicer-looking widgets (we use it for the scrollbar)
 
 # =============================================================================
-#  US STATE CAPITALS — Flash Card App  (grok version)
+#  US STATE CAPITALS — Flash Card App 
 # =============================================================================
 #  Two views:
 #    Table  →  scrollable list of every state, abbreviation, and capital
@@ -1391,6 +1391,7 @@ EMPHASIS_CLUE    = "#f9e2af"   # yellow — the state being quizzed (clue)
 EMPHASIS_CORRECT = "#a6e3a1"   # green  — correct answer
 EMPHASIS_WRONG   = "#f38ba8"   # red    — wrong answer
 EMPHASIS_SELECT  = "#89b4fa"   # blue   — currently selected by user
+LABEL_ON_EMPHASIS = "#000000"  # black  — abbreviation text on any emphasized state
 
 
 def mini_inset_to_canvas(canvas, lon, lat, inset_west, inset_east, inset_south, inset_north,
@@ -1421,6 +1422,7 @@ def draw_mini_map(canvas, highlight_abbrev=None, clickable=False):
     canvas.delete("all")
     canvas._poly_to_abbrev = {}   # map canvas item IDs → abbreviations
     canvas._abbrev_to_polys = {}  # abbreviation → list of polygon IDs
+    canvas._abbrev_to_labels = {}  # abbreviation → text label item ID
 
     cw = int(canvas["width"])
     ch = int(canvas["height"])
@@ -1467,8 +1469,10 @@ def draw_mini_map(canvas, highlight_abbrev=None, clickable=False):
             llon = sum(p[0] for p in pts) / len(pts)
             llat = sum(p[1] for p in pts) / len(pts)
         lx, ly = mini_to_canvas(canvas, llon, llat)
-        canvas.create_text(lx, ly, text=abbrev, fill=TEXT_LIGHT,
-                           font=("Helvetica", 6, "bold"))
+        label_fill = LABEL_ON_EMPHASIS if is_highlight else TEXT_LIGHT
+        label_id = canvas.create_text(lx, ly, text=abbrev, fill=label_fill,
+                                      font=("Helvetica", 6, "bold"))
+        canvas._abbrev_to_labels[abbrev] = label_id
 
     # ── Draw Alaska inset (bottom-left corner) ──────────────────────────────
     ak_box_w, ak_box_h = int(cw * 0.18), int(ch * 0.22)
@@ -1492,8 +1496,10 @@ def draw_mini_map(canvas, highlight_abbrev=None, clickable=False):
 
     ak_lx = ak_box_left + ak_box_w // 2
     ak_ly = ak_box_top + ak_box_h // 2
-    canvas.create_text(ak_lx, ak_ly, text="AK", fill=TEXT_LIGHT,
-                       font=("Helvetica", 6, "bold"))
+    ak_label_fill = LABEL_ON_EMPHASIS if ak_is_highlight else TEXT_LIGHT
+    ak_label_id = canvas.create_text(ak_lx, ak_ly, text="AK", fill=ak_label_fill,
+                                     font=("Helvetica", 6, "bold"))
+    canvas._abbrev_to_labels["AK"] = ak_label_id
 
     # ── Draw Hawaii inset (right of Alaska) ─────────────────────────────────
     hi_box_w, hi_box_h = int(cw * 0.12), int(ch * 0.16)
@@ -1521,8 +1527,10 @@ def draw_mini_map(canvas, highlight_abbrev=None, clickable=False):
 
     hi_lx = hi_box_left + hi_box_w // 2
     hi_ly = hi_box_top + hi_box_h // 2
-    canvas.create_text(hi_lx, hi_ly, text="HI", fill=TEXT_LIGHT,
-                       font=("Helvetica", 6, "bold"))
+    hi_label_fill = LABEL_ON_EMPHASIS if hi_is_highlight else TEXT_LIGHT
+    hi_label_id = canvas.create_text(hi_lx, hi_ly, text="HI", fill=hi_label_fill,
+                                     font=("Helvetica", 6, "bold"))
+    canvas._abbrev_to_labels["HI"] = hi_label_id
 
     # ── Raise all text above polygons ───────────────────────────────────────
     for item_id in canvas.find_all():
@@ -1557,6 +1565,9 @@ def emphasize_state(canvas, abbrev, color):
     """
     for poly_id in canvas._abbrev_to_polys.get(abbrev, []):
         canvas.itemconfig(poly_id, fill=color, outline=color, width=2)
+    label_id = getattr(canvas, "_abbrev_to_labels", {}).get(abbrev)
+    if label_id:
+        canvas.itemconfig(label_id, fill=LABEL_ON_EMPHASIS)
 
 
 # Variable to track which state the user clicked on the answer map
