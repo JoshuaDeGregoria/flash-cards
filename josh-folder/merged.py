@@ -869,7 +869,7 @@ TILE_OUTLINE  = "#585b70"   # border between states
 
 # ── WINDOW ───────────────────────────────────────────────────────────────────
 root = tk.Tk()
-root.title("US State Capitals (grok)")
+root.title("US State Capitals")
 root.geometry("900x800")
 root.configure(bg=BG_DARK)
 root.resizable(True, True)
@@ -879,86 +879,68 @@ root.resizable(True, True)
 nav_frame = tk.Frame(root, bg=BG_DARKER, pady=6)
 nav_frame.pack(fill="x")
 
-# Two content frames; only one is visible at a time
-table_frame = tk.Frame(root, bg=BG_DARK)
-map_frame   = tk.Frame(root, bg=BG_DARK)
+# Container that holds the content frames — using grid so we can
+# reliably show/hide frames without the white-screen stacking bug.
+content_area = tk.Frame(root, bg=BG_DARK)
+content_area.pack(fill="both", expand=True)
+content_area.grid_rowconfigure(0, weight=1)
+content_area.grid_columnconfigure(0, weight=1)
+
+# Two content frames stacked in the same grid cell; only one is raised at a time
+map_frame   = tk.Frame(content_area, bg=BG_DARK)
+flash_frame = tk.Frame(content_area, bg=BG_DARK)
+
+# Place both frames in the same cell — they overlap, and we use tkraise to switch
+map_frame.grid(row=0, column=0, sticky="nsew")
+flash_frame.grid(row=0, column=0, sticky="nsew")
+
+# All nav buttons stored in a list so show_* functions can reset them all
+nav_buttons = []
 
 
-def show_table():
-    """Switch to the table view."""
-    map_frame.pack_forget()
-    table_frame.pack(fill="both", expand=True)
-    table_btn.configure(bg=ACCENT_BLUE, fg=BG_DARK)
-    map_btn.configure(bg=TILE_DEFAULT, fg=TEXT_LIGHT)
+def switch_tab(frame, btn, on_show=None):
+    """
+    Raise the requested frame to the top of the grid stack.
+    Using grid + tkraise avoids the pack/unpack white-screen bug entirely.
+    """
+    # Reset all nav button colors
+    for b in nav_buttons:
+        b.configure(bg=TILE_DEFAULT, fg=TEXT_LIGHT)
+
+    # Raise the requested frame to the front and highlight its button
+    frame.tkraise()
+    btn.configure(bg=ACCENT_BLUE, fg=BG_DARK)
+
+    # Run any extra setup (e.g. show_settings for flash cards)
+    if on_show:
+        on_show()
 
 
 def show_map():
     """Switch to the map view."""
-    table_frame.pack_forget()
-    map_frame.pack(fill="both", expand=True)
-    map_btn.configure(bg=ACCENT_BLUE, fg=BG_DARK)
-    table_btn.configure(bg=TILE_DEFAULT, fg=TEXT_LIGHT)
+    switch_tab(map_frame, map_btn)
 
 
-table_btn = tk.Button(nav_frame, text="  Table  ", command=show_table,
-                      bg=ACCENT_BLUE, fg=BG_DARK, font=("Helvetica", 11, "bold"),
-                      relief="flat", cursor="hand2", padx=10)
-table_btn.pack(side="left", padx=(12, 4))
+def show_flash():
+    """Switch to the flash cards view."""
+    # If a quiz is running, don't reset to settings — just show the flash frame
+    if quiz_state.get("running"):
+        switch_tab(flash_frame, flash_btn)
+    else:
+        switch_tab(flash_frame, flash_btn, on_show=show_settings)
+
 
 map_btn = tk.Button(nav_frame, text="  Map  ", command=show_map,
-                    bg=TILE_DEFAULT, fg=TEXT_LIGHT, font=("Helvetica", 11, "bold"),
+                    bg=ACCENT_BLUE, fg=BG_DARK, font=("Helvetica", 11, "bold"),
                     relief="flat", cursor="hand2", padx=10)
-map_btn.pack(side="left", padx=4)
+map_btn.pack(side="left", padx=(12, 4))
 
+flash_btn = tk.Button(nav_frame, text="  Flash Cards  ", command=show_flash,
+                      bg=TILE_DEFAULT, fg=TEXT_LIGHT, font=("Helvetica", 11, "bold"),
+                      relief="flat", cursor="hand2", padx=10)
+flash_btn.pack(side="left", padx=4)
 
-# ── TABLE VIEW ───────────────────────────────────────────────────────────────
-tk.Label(table_frame, text="US State Capitals", font=("Helvetica", 20, "bold"),
-         bg=BG_DARK, fg=TEXT_LIGHT).pack(pady=(16, 8))
-
-# Outer container for the canvas + scrollbar pair
-table_container = tk.Frame(table_frame, bg=BG_DARK)
-table_container.pack(fill="both", expand=True, padx=16, pady=8)
-
-table_canvas = tk.Canvas(table_container, bg=BG_DARK, highlightthickness=0)
-table_scroll  = ttk.Scrollbar(table_container, orient="vertical",
-                               command=table_canvas.yview)
-table_inner   = tk.Frame(table_canvas, bg=BG_DARK)
-
-# When rows are added, update how far the user can scroll
-table_inner.bind("<Configure>",
-                 lambda e: table_canvas.configure(
-                     scrollregion=table_canvas.bbox("all")))
-
-table_canvas.create_window((0, 0), window=table_inner, anchor="nw")
-table_canvas.configure(yscrollcommand=table_scroll.set)
-
-table_canvas.pack(side="left", fill="both", expand=True)
-table_scroll.pack(side="right", fill="y")
-
-# Column header row
-headers    = ["#", "State", "Abbreviation", "Capital"]
-col_widths = [3, 22, 14, 20]
-
-for col, (header, width) in enumerate(zip(headers, col_widths)):
-    tk.Label(table_inner, text=header, font=("Helvetica", 11, "bold"),
-             bg=TILE_DEFAULT, fg=ACCENT_BLUE, width=width, anchor="w",
-             padx=8, pady=6).grid(row=0, column=col, sticky="ew",
-                                  padx=1, pady=(0, 2))
-
-# One row per state, sorted A–Z, with alternating row backgrounds
-for i, (state_name, info) in enumerate(sorted(states.items()), start=1):
-    row_bg   = BG_DARK if i % 2 == 0 else BG_DARKER
-    row_data = [str(i), state_name, info["abbreviation"], info["capital"]]
-
-    for col, (value, width) in enumerate(zip(row_data, col_widths)):
-        tk.Label(table_inner, text=value, font=("Helvetica", 10),
-                 bg=row_bg, fg=TEXT_LIGHT, width=width, anchor="w",
-                 padx=8, pady=5).grid(row=i, column=col, sticky="ew",
-                                      padx=1, pady=1)
-
-# Mouse-wheel scrolling for the table
-root.bind("<MouseWheel>",
-          lambda e: table_canvas.yview_scroll(-1 * (e.delta // 120), "units"))
+nav_buttons = [map_btn, flash_btn]
 
 
 # ── MAP VIEW ─────────────────────────────────────────────────────────────────
@@ -1112,6 +1094,896 @@ for item_id in map_canvas.find_all():
         map_canvas.tag_raise(item_id)
 
 
+# ── FLASH CARDS VIEW ─────────────────────────────────────────────────────────
+# The flash_frame holds two sub-frames:
+#   settings_frame — the "home" screen where users configure their session
+#   quiz_frame     — the actual flash card quiz (built later)
+#   results_frame  — the rankings screen shown after a quiz (built later)
+
+settings_frame = tk.Frame(flash_frame, bg=BG_DARK)
+quiz_frame     = tk.Frame(flash_frame, bg=BG_DARK)
+results_frame  = tk.Frame(flash_frame, bg=BG_DARK)
+
+
+def show_settings():
+    """Show the settings home screen inside the Flash Cards tab."""
+    cancel_quiz_callbacks()
+    quiz_state["running"] = False
+    quiz_frame.pack_forget()
+    results_frame.pack_forget()
+    settings_frame.pack(fill="both", expand=True)
+
+
+# ── SETTINGS UI ─────────────────────────────────────────────────────────────
+# Each of the four items (Map, Name, Initials, Capital) gets a single
+# dropdown to assign its role: show as clue, answer (type/dropdown/click),
+# or don't use.  This prevents overlap by design — each item can only
+# have one role.
+
+tk.Label(settings_frame, text="Flash Card Settings",
+         font=("Helvetica", 20, "bold"),
+         bg=BG_DARK, fg=TEXT_LIGHT).pack(pady=(20, 10))
+
+# ── Initials entry ──────────────────────────────────────────────────────────
+initials_row = tk.Frame(settings_frame, bg=BG_DARK)
+initials_row.pack(pady=(0, 14))
+
+tk.Label(initials_row, text="Your Initials (3 letters):",
+         font=("Helvetica", 11), bg=BG_DARK, fg=TEXT_LIGHT).pack(side="left", padx=(0, 8))
+
+initials_var = tk.StringVar()
+initials_entry = tk.Entry(initials_row, textvariable=initials_var,
+                          font=("Helvetica", 11), width=5, justify="center",
+                          bg=TILE_DEFAULT, fg=TEXT_LIGHT, insertbackground=TEXT_LIGHT)
+initials_entry.pack(side="left")
+
+# ── Item role selection ─────────────────────────────────────────────────────
+# Section 1: What is displayed (prompt / clue)
+tk.Label(settings_frame, text="Choose a role for each item:",
+         font=("Helvetica", 13, "bold"),
+         bg=BG_DARK, fg=ACCENT_BLUE).pack(pady=(6, 2))
+
+# Description labels so the user understands each option
+desc_frame = tk.Frame(settings_frame, bg=BG_DARK)
+desc_frame.pack(padx=30, pady=(0, 8), anchor="w")
+
+tk.Label(desc_frame, text="Show as clue — information displayed for each question",
+         font=("Helvetica", 9), bg=BG_DARK, fg=TEXT_DIM).pack(anchor="w")
+tk.Label(desc_frame, text="Answer — what you will be quizzed on and have to enter/select",
+         font=("Helvetica", 9), bg=BG_DARK, fg=TEXT_DIM).pack(anchor="w")
+tk.Label(desc_frame, text="Text entry earns 2/6 pts  |  Multiple choice earns 1/6 pt",
+         font=("Helvetica", 9), bg=BG_DARK, fg=TEXT_DIM).pack(anchor="w")
+
+# One row per item, each with a dropdown to pick its role.
+# Map Location can only be "Show as clue", "Answer (click map)", or "Don't use".
+# The other three can be "Show as clue", "Answer (type)", "Answer (dropdown)", or "Don't use".
+
+item_roles = {}  # will hold {"map": StringVar, "name": StringVar, ...}
+
+role_grid = tk.Frame(settings_frame, bg=BG_DARK)
+role_grid.pack(padx=30, pady=4)
+
+# Column headers
+tk.Label(role_grid, text="Item", font=("Helvetica", 10, "bold"),
+         bg=BG_DARK, fg=TEXT_LIGHT, width=16, anchor="w").grid(row=0, column=0, padx=4, pady=2)
+tk.Label(role_grid, text="Role", font=("Helvetica", 10, "bold"),
+         bg=BG_DARK, fg=TEXT_LIGHT, width=24, anchor="w").grid(row=0, column=1, padx=4, pady=2)
+
+items_config = [
+    ("Map Location",   "map",      ["Show as clue", "Answer (click map)", "Don't use"]),
+    ("State Name",     "name",     ["Show as clue", "Answer (type it)", "Answer (multiple choice)", "Don't use"]),
+    ("State Initials", "initials", ["Show as clue", "Answer (type it)", "Answer (multiple choice)", "Don't use"]),
+    ("Capital City",   "capital",  ["Show as clue", "Answer (type it)", "Answer (multiple choice)", "Don't use"]),
+]
+
+# Default roles: Map shown, Name and Capital as typed answers
+defaults = {"map": "Show as clue", "name": "Answer (type it)",
+            "initials": "Don't use", "capital": "Answer (type it)"}
+
+for row_idx, (label_text, key, options) in enumerate(items_config, start=1):
+    tk.Label(role_grid, text=label_text, font=("Helvetica", 10),
+             bg=BG_DARK, fg=TEXT_LIGHT, width=16, anchor="w"
+             ).grid(row=row_idx, column=0, padx=4, pady=3)
+
+    var = tk.StringVar(value=defaults[key])
+    item_roles[key] = var
+
+    menu = ttk.Combobox(role_grid, textvariable=var, values=options,
+                        state="readonly", width=24, font=("Helvetica", 10))
+    menu.grid(row=row_idx, column=1, padx=4, pady=3)
+
+# ── Error message label (hidden until needed) ───────────────────────────────
+error_var = tk.StringVar(value="")
+error_label = tk.Label(settings_frame, textvariable=error_var,
+                       font=("Helvetica", 10, "bold"),
+                       bg=BG_DARK, fg="#f38ba8")  # red color for errors
+error_label.pack(pady=(10, 0))
+
+# ── Start button ────────────────────────────────────────────────────────────
+def start_quiz():
+    """Validate settings and launch the flash card quiz."""
+    # Validate initials: must be exactly 3 letters
+    raw = initials_var.get().strip().upper()
+    if len(raw) != 3 or not raw.isalpha():
+        error_var.set("Enter exactly 3 letter initials.")
+        return
+
+    # Collect prompt and answer items from the role dropdowns
+    prompt_items = []   # items shown as the clue
+    answer_items = []   # items the user must enter
+    # answer_methods maps each answer key to "type", "dropdown", or "click"
+    answer_methods = {}
+
+    for key, var in item_roles.items():
+        role = var.get()
+        if role == "Show as clue":
+            prompt_items.append(key)
+        elif role == "Answer (type it)":
+            answer_items.append(key)
+            answer_methods[key] = "type"
+        elif role == "Answer (multiple choice)":
+            answer_items.append(key)
+            answer_methods[key] = "dropdown"
+        elif role == "Answer (click map)":
+            answer_items.append(key)
+            answer_methods[key] = "click"
+        # "Don't use" — skip
+
+    # Validation
+    if len(prompt_items) == 0:
+        error_var.set("At least 1 item must be set to 'Show as clue'.")
+        return
+    if len(answer_items) == 0:
+        error_var.set("At least 1 item must be set to an Answer role.")
+        return
+    if len(prompt_items) > 3:
+        error_var.set("At most 3 items can be 'Show as clue'.")
+        return
+    if len(answer_items) > 3:
+        error_var.set("At most 3 items can be answers.")
+        return
+
+    # All good — clear error, store initials
+    error_var.set("")
+    initials_var.set(raw)
+
+    # Launch the quiz
+    launch_quiz(raw, prompt_items, answer_items, answer_methods)
+
+
+def view_rankings_from_settings():
+    """Open the leaderboard without requiring the user to finish a quiz first."""
+    settings_frame.pack_forget()
+    quiz_frame.pack_forget()
+    show_results(save_current=False, show_summary=False, title_text="Top 10 Rankings")
+
+
+action_row = tk.Frame(settings_frame, bg=BG_DARK)
+action_row.pack(pady=(14, 20))
+
+start_btn = tk.Button(action_row, text="  Start Quiz  ", command=start_quiz,
+                      bg=ACCENT_GREEN, fg=BG_DARK, font=("Helvetica", 13, "bold"),
+                      relief="flat", cursor="hand2", padx=16, pady=6)
+start_btn.pack(side="left", padx=6)
+
+rankings_btn = tk.Button(action_row, text="  View Rankings  ",
+                         command=view_rankings_from_settings,
+                         bg=TILE_DEFAULT, fg=TEXT_LIGHT, font=("Helvetica", 13, "bold"),
+                         relief="flat", cursor="hand2", padx=16, pady=6)
+rankings_btn.pack(side="left", padx=6)
+
+
+# ── QUIZ ENGINE ──────────────────────────────────────────────────────────────
+# This section builds and runs the timed flash card quiz inside quiz_frame.
+#
+# Quiz state is stored in a dictionary so all the helper functions can
+# read and update it without needing global variables everywhere.
+
+import random
+import time as time_module
+
+quiz_state = {}   # populated fresh each time launch_quiz() is called
+
+
+def cancel_quiz_callbacks():
+    """Cancel any scheduled timer or next-card callbacks from the active quiz.
+    Prevents ghost callbacks from firing after the quiz has ended."""
+    for key in ("timer_after_id", "next_card_after_id"):
+        after_id = quiz_state.get(key)
+        if after_id:
+            try:
+                root.after_cancel(after_id)
+            except tk.TclError:
+                pass
+            quiz_state[key] = None
+
+
+# ── Quiz UI widgets (created once, updated each card) ───────────────────────
+
+# Top bar: timer + card counter
+quiz_top = tk.Frame(quiz_frame, bg=BG_DARK)
+quiz_top.pack(fill="x", padx=20, pady=(12, 6))
+
+timer_var = tk.StringVar(value="Time: 300s")
+tk.Label(quiz_top, textvariable=timer_var, font=("Helvetica", 13, "bold"),
+         bg=BG_DARK, fg="#f38ba8").pack(side="left")
+
+card_counter_var = tk.StringVar(value="Card 1 / 50")
+tk.Label(quiz_top, textvariable=card_counter_var, font=("Helvetica", 13, "bold"),
+         bg=BG_DARK, fg=TEXT_LIGHT).pack(side="right")
+
+# Prompt area: shows the clue information
+prompt_var = tk.StringVar(value="")
+prompt_label = tk.Label(quiz_frame, textvariable=prompt_var, font=("Helvetica", 16),
+                        bg=TILE_DEFAULT, fg=ACCENT_GREEN, padx=16, pady=12,
+                        wraplength=700, justify="center")
+prompt_label.pack(fill="x", padx=20, pady=(4, 10))
+
+# Map prompt area: shows the highlighted state as a clue
+# (only visible when "map" is a prompt item)
+quiz_map_frame = tk.Frame(quiz_frame, bg=BG_DARK)
+quiz_map_canvas = tk.Canvas(quiz_map_frame, bg=BG_DARKER, highlightthickness=0,
+                            width=660, height=400)
+quiz_map_canvas.pack(pady=4)
+
+# Answer area: holds dynamically created entry/dropdown widgets
+answer_area = tk.Frame(quiz_frame, bg=BG_DARK)
+answer_area.pack(fill="x", padx=40, pady=(0, 6))
+
+# Feedback label: shows "Correct!" or "Wrong — the answer was ..."
+feedback_var = tk.StringVar(value="")
+feedback_label = tk.Label(quiz_frame, textvariable=feedback_var,
+                          font=("Helvetica", 11), bg=BG_DARK, fg=ACCENT_BLUE,
+                          wraplength=700)
+feedback_label.pack(pady=(0, 4))
+
+# Map answer area: a clickable canvas for when "map" is an answer
+# (only visible when "map" is an answer item)
+quiz_answer_map_frame = tk.Frame(quiz_frame, bg=BG_DARK)
+quiz_answer_map_canvas = tk.Canvas(quiz_answer_map_frame, bg=BG_DARKER,
+                                   highlightthickness=0, width=660, height=400)
+quiz_answer_map_canvas.pack(pady=4)
+
+# Bottom bar: submit + end session buttons
+quiz_bottom = tk.Frame(quiz_frame, bg=BG_DARK)
+quiz_bottom.pack(pady=(4, 12))
+
+submit_btn = tk.Button(quiz_bottom, text="  Submit  ", font=("Helvetica", 12, "bold"),
+                       bg=ACCENT_BLUE, fg=BG_DARK, relief="flat", cursor="hand2",
+                       padx=14, pady=4, command=lambda: submit_answer())
+submit_btn.pack(side="left", padx=8)
+
+end_btn = tk.Button(quiz_bottom, text="  End Session  ", font=("Helvetica", 12, "bold"),
+                    bg="#f38ba8", fg=BG_DARK, relief="flat", cursor="hand2",
+                    padx=14, pady=4, command=lambda: end_quiz())
+end_btn.pack(side="left", padx=8)
+
+
+# ── Mini-map drawing helpers ────────────────────────────────────────────────
+# These draw a small version of the US map on a given canvas, used for both
+# the prompt map (show a highlighted state) and the answer map (click a state).
+
+MINI_WEST, MINI_EAST   = -125.0, -66.5
+MINI_SOUTH, MINI_NORTH =   24.0,  50.0
+
+
+def mini_to_canvas(canvas, lon, lat):
+    """Convert lon/lat to pixel coords on a mini map canvas."""
+    w = int(canvas["width"])
+    h = int(canvas["height"])
+    pad = 5
+    x = pad + (lon - MINI_WEST)   / (MINI_EAST  - MINI_WEST)  * (w - 2 * pad)
+    y = pad + (MINI_NORTH - lat)  / (MINI_NORTH - MINI_SOUTH) * (h - 2 * pad)
+    return x, y
+
+
+def mini_points_to_flat(canvas, point_list):
+    """Convert lon/lat pairs to flat pixel list for a mini canvas."""
+    flat = []
+    for lon, lat in point_list:
+        x, y = mini_to_canvas(canvas, lon, lat)
+        flat.extend([x, y])
+    return flat
+
+
+# ── Emphasis colors for map states ───────────────────────────────────────────
+EMPHASIS_CLUE    = "#f9e2af"   # yellow — the state being quizzed (clue)
+EMPHASIS_CORRECT = "#a6e3a1"   # green  — correct answer
+EMPHASIS_WRONG   = "#f38ba8"   # red    — wrong answer
+EMPHASIS_SELECT  = "#89b4fa"   # blue   — currently selected by user
+
+
+def mini_inset_to_canvas(canvas, lon, lat, inset_west, inset_east, inset_south, inset_north,
+                         box_left, box_top, box_w, box_h):
+    """Convert lon/lat to pixel coords inside an inset box on a mini canvas."""
+    x = box_left + (lon - inset_west) / (inset_east - inset_west) * box_w
+    y = box_top + (inset_north - lat) / (inset_north - inset_south) * box_h
+    return x, y
+
+
+def mini_inset_flat(canvas, point_list, inset_west, inset_east, inset_south, inset_north,
+                    box_left, box_top, box_w, box_h):
+    """Convert lon/lat pairs to flat pixel list for an inset on a mini canvas."""
+    flat = []
+    for lon, lat in point_list:
+        x, y = mini_inset_to_canvas(canvas, lon, lat, inset_west, inset_east,
+                                     inset_south, inset_north, box_left, box_top, box_w, box_h)
+        flat.extend([x, y])
+    return flat
+
+
+def draw_mini_map(canvas, highlight_abbrev=None, clickable=False):
+    """
+    Draw all 50 states on a mini canvas (48 contiguous + AK/HI insets).
+    If highlight_abbrev is given, fill that state with the clue color.
+    If clickable is True, bind click events for answer selection.
+    """
+    canvas.delete("all")
+    canvas._poly_to_abbrev = {}   # map canvas item IDs → abbreviations
+    canvas._abbrev_to_polys = {}  # abbreviation → list of polygon IDs
+
+    cw = int(canvas["width"])
+    ch = int(canvas["height"])
+
+    def bind_click_events(poly_id, abbrev):
+        """Attach hover and click events to a polygon for answer selection."""
+        canvas._poly_to_abbrev[poly_id] = abbrev
+        canvas.tag_bind(poly_id, "<Button-1>",
+                        lambda e, a=abbrev: on_map_answer_click(a))
+        canvas.tag_bind(poly_id, "<Enter>",
+                        lambda e, a=abbrev: highlight_answer_state(canvas, a, TILE_HOVER))
+        canvas.tag_bind(poly_id, "<Leave>",
+                        lambda e, a=abbrev: highlight_answer_state(
+                            canvas, a,
+                            EMPHASIS_SELECT if map_answer_var.get() == a else TILE_DEFAULT))
+
+    # ── Draw contiguous 48 states ───────────────────────────────────────────
+    for abbrev, shape in state_shapes.items():
+        is_highlight = (abbrev == highlight_abbrev)
+        fill = EMPHASIS_CLUE if is_highlight else TILE_DEFAULT
+        outline = TEXT_LIGHT if is_highlight else TILE_OUTLINE
+        width = 2 if is_highlight else 1
+
+        if isinstance(shape[0], list):
+            polygons = shape
+        else:
+            polygons = [shape]
+
+        poly_ids = []
+        for point_list in polygons:
+            flat = mini_points_to_flat(canvas, point_list)
+            poly_id = canvas.create_polygon(flat, fill=fill, outline=outline, width=width)
+            poly_ids.append(poly_id)
+            if clickable:
+                bind_click_events(poly_id, abbrev)
+
+        canvas._abbrev_to_polys[abbrev] = poly_ids
+
+        # Draw state label
+        if abbrev in LABEL_OVERRIDES:
+            llon, llat = LABEL_OVERRIDES[abbrev]
+        else:
+            pts = polygons[0]
+            llon = sum(p[0] for p in pts) / len(pts)
+            llat = sum(p[1] for p in pts) / len(pts)
+        lx, ly = mini_to_canvas(canvas, llon, llat)
+        canvas.create_text(lx, ly, text=abbrev, fill=TEXT_LIGHT,
+                           font=("Helvetica", 6, "bold"))
+
+    # ── Draw Alaska inset (bottom-left corner) ──────────────────────────────
+    ak_box_w, ak_box_h = int(cw * 0.18), int(ch * 0.22)
+    ak_box_left, ak_box_top = 5, ch - ak_box_h - 5
+
+    # Dashed border box
+    canvas.create_rectangle(ak_box_left - 1, ak_box_top - 1,
+                            ak_box_left + ak_box_w + 1, ak_box_top + ak_box_h + 1,
+                            fill="", outline=TEXT_DIM, width=1, dash=(3, 3))
+
+    ak_is_highlight = (highlight_abbrev == "AK")
+    ak_fill = EMPHASIS_CLUE if ak_is_highlight else TILE_DEFAULT
+    ak_outline = TEXT_LIGHT if ak_is_highlight else TILE_OUTLINE
+
+    ak_flat = mini_inset_flat(canvas, alaska_shape, -170.0, -130.0, 54.0, 72.0,
+                               ak_box_left, ak_box_top, ak_box_w, ak_box_h)
+    ak_poly = canvas.create_polygon(ak_flat, fill=ak_fill, outline=ak_outline, width=1)
+    canvas._abbrev_to_polys["AK"] = [ak_poly]
+    if clickable:
+        bind_click_events(ak_poly, "AK")
+
+    ak_lx = ak_box_left + ak_box_w // 2
+    ak_ly = ak_box_top + ak_box_h // 2
+    canvas.create_text(ak_lx, ak_ly, text="AK", fill=TEXT_LIGHT,
+                       font=("Helvetica", 6, "bold"))
+
+    # ── Draw Hawaii inset (right of Alaska) ─────────────────────────────────
+    hi_box_w, hi_box_h = int(cw * 0.12), int(ch * 0.16)
+    hi_box_left = ak_box_left + ak_box_w + 10
+    hi_box_top = ch - hi_box_h - 5
+
+    canvas.create_rectangle(hi_box_left - 1, hi_box_top - 1,
+                            hi_box_left + hi_box_w + 1, hi_box_top + hi_box_h + 1,
+                            fill="", outline=TEXT_DIM, width=1, dash=(3, 3))
+
+    hi_is_highlight = (highlight_abbrev == "HI")
+    hi_fill = EMPHASIS_CLUE if hi_is_highlight else TILE_DEFAULT
+    hi_outline = TEXT_LIGHT if hi_is_highlight else TILE_OUTLINE
+
+    hi_poly_ids = []
+    for island_pts in hawaii_islands:
+        hi_flat = mini_inset_flat(canvas, island_pts, -161.0, -154.5, 18.8, 22.5,
+                                   hi_box_left, hi_box_top, hi_box_w, hi_box_h)
+        hi_poly = canvas.create_polygon(hi_flat, fill=hi_fill, outline=hi_outline, width=1)
+        hi_poly_ids.append(hi_poly)
+        if clickable:
+            bind_click_events(hi_poly, "HI")
+
+    canvas._abbrev_to_polys["HI"] = hi_poly_ids
+
+    hi_lx = hi_box_left + hi_box_w // 2
+    hi_ly = hi_box_top + hi_box_h // 2
+    canvas.create_text(hi_lx, hi_ly, text="HI", fill=TEXT_LIGHT,
+                       font=("Helvetica", 6, "bold"))
+
+    # ── Raise all text above polygons ───────────────────────────────────────
+    for item_id in canvas.find_all():
+        if canvas.type(item_id) == "text":
+            canvas.tag_raise(item_id)
+
+    # If highlighting a clue state, draw a ring around it
+    if highlight_abbrev:
+        if highlight_abbrev == "AK":
+            cx, cy = ak_lx, ak_ly
+        elif highlight_abbrev == "HI":
+            cx, cy = hi_lx, hi_ly
+        elif highlight_abbrev in LABEL_OVERRIDES:
+            cx, cy = mini_to_canvas(canvas, *LABEL_OVERRIDES[highlight_abbrev])
+        else:
+            cx, cy = None, None
+        if cx is not None:
+            canvas.create_oval(cx - 16, cy - 16, cx + 16, cy + 16,
+                               outline=EMPHASIS_CLUE, width=2)
+
+
+def highlight_answer_state(canvas, abbrev, color):
+    """Change the fill color of a state's polygons on the answer map."""
+    for poly_id in canvas._abbrev_to_polys.get(abbrev, []):
+        canvas.itemconfig(poly_id, fill=color)
+
+
+def emphasize_state(canvas, abbrev, color):
+    """
+    Emphasize a state on the map with a color (correct/wrong/clue).
+    Also draws a ring around its center.
+    """
+    for poly_id in canvas._abbrev_to_polys.get(abbrev, []):
+        canvas.itemconfig(poly_id, fill=color, outline=color, width=2)
+
+
+# Variable to track which state the user clicked on the answer map
+map_answer_var = tk.StringVar(value="")
+map_answer_label_var = tk.StringVar(value="Click a state on the map")
+
+tk.Label(quiz_answer_map_frame, textvariable=map_answer_label_var,
+         font=("Helvetica", 10), bg=BG_DARK, fg=TEXT_DIM).pack()
+
+
+def on_map_answer_click(abbrev):
+    """Called when the user clicks a state on the answer map."""
+    # Reset the previously selected state back to default
+    prev = map_answer_var.get()
+    if prev and prev != abbrev:
+        highlight_answer_state(quiz_answer_map_canvas, prev, TILE_DEFAULT)
+
+    # Highlight the newly selected state in blue
+    map_answer_var.set(abbrev)
+    highlight_answer_state(quiz_answer_map_canvas, abbrev, EMPHASIS_SELECT)
+    # Don't reveal the state name — just say "Selected" so it's not cheating
+    map_answer_label_var.set("State selected (click again to change)")
+
+
+# ── Timer logic ─────────────────────────────────────────────────────────────
+
+def tick_timer():
+    """Called every second to update the countdown timer."""
+    if not quiz_state.get("running"):
+        return
+
+    quiz_state["timer_after_id"] = None
+    elapsed = time_module.time() - quiz_state["start_time"]
+    remaining = max(0, 300 - int(elapsed))
+    timer_var.set(f"Time: {remaining}s")
+
+    if remaining <= 0:
+        end_quiz()  # time's up
+    else:
+        quiz_state["timer_after_id"] = root.after(1000, tick_timer)
+
+
+# ── Core quiz functions ─────────────────────────────────────────────────────
+
+def launch_quiz(user_initials, prompt_items, answer_items, answer_methods):
+    """Set up quiz state and show the first card."""
+    # Shuffle all 50 states into a random order
+    all_states = list(states.keys())
+    random.shuffle(all_states)
+
+    quiz_state.clear()
+    quiz_state.update({
+        "running":        True,
+        "initials":       user_initials,
+        "prompt_items":   prompt_items,     # e.g. ["map", "name"]
+        "answer_items":   answer_items,     # e.g. ["capital"]
+        "answer_methods": answer_methods,   # e.g. {"capital": "type"}
+        "deck":           all_states,       # shuffled list of state names
+        "current_index":  0,                # which card we're on
+        "score":          0.0,              # running score
+        "start_time":     time_module.time(),
+        "timer_after_id":     None,          # tracks scheduled timer callback
+        "next_card_after_id": None,          # tracks scheduled next-card callback
+    })
+
+    # Hide the navigation bar so the user can't leave during the quiz
+    nav_frame.pack_forget()
+
+    # Switch from settings to quiz view
+    settings_frame.pack_forget()
+    results_frame.pack_forget()
+
+    # Reset the quiz frame — unpack everything inside it, then rebuild layout
+    for widget in quiz_frame.winfo_children():
+        widget.pack_forget()
+
+    # Re-pack quiz UI in the correct order:
+    # 1. Top bar (timer + card counter)
+    quiz_top.pack(fill="x", padx=20, pady=(12, 6))
+
+    # 2. Prompt text
+    prompt_var.set("")
+    prompt_label.pack(fill="x", padx=20, pady=(4, 10))
+
+    # 3. Prompt map (if map is a clue)
+    if "map" in prompt_items:
+        quiz_map_frame.pack(pady=(0, 6))
+    else:
+        quiz_map_frame.pack_forget()
+
+    # 4. Answer area (text entries / dropdowns)
+    answer_area.pack(fill="x", padx=40, pady=(0, 6))
+
+    # 5. Feedback label
+    feedback_label.pack(pady=(0, 4))
+
+    # 6. Answer map (if map is an answer)
+    if "map" in answer_items:
+        quiz_answer_map_frame.pack(pady=(0, 6))
+    else:
+        quiz_answer_map_frame.pack_forget()
+
+    # 7. Bottom bar (submit + end session)
+    quiz_bottom.pack(pady=(4, 12))
+
+    # Now show the quiz frame
+    quiz_frame.pack(fill="both", expand=True)
+
+    # Start the timer
+    tick_timer()
+
+    # Show the first card
+    show_card()
+
+
+def show_card():
+    """Display the current flash card's prompt and answer fields."""
+    quiz_state["next_card_after_id"] = None  # callback has fired, clear its ID
+    idx = quiz_state["current_index"]
+    deck = quiz_state["deck"]
+
+    if idx >= len(deck):
+        end_quiz()
+        return
+
+    state_name = deck[idx]
+    info = states[state_name]
+    abbrev = info["abbreviation"]
+    capital = info["capital"]
+
+    card_counter_var.set(f"Card {idx + 1} / {len(deck)}")
+    feedback_var.set("")
+    map_answer_var.set("")
+    map_answer_label_var.set("Click a state on the map")
+
+    # ── Build the prompt text ───────────────────────────────────────────────
+    prompt_parts = []
+    for item in quiz_state["prompt_items"]:
+        if item == "name":
+            prompt_parts.append(f"State: {state_name}")
+        elif item == "initials":
+            prompt_parts.append(f"Initials: {abbrev}")
+        elif item == "capital":
+            prompt_parts.append(f"Capital: {capital}")
+        # "map" is handled separately below
+
+    prompt_var.set("   |   ".join(prompt_parts) if prompt_parts else "Identify this state:")
+
+    # Draw the prompt map if needed
+    if "map" in quiz_state["prompt_items"]:
+        draw_mini_map(quiz_map_canvas, highlight_abbrev=abbrev)
+
+    # Draw the answer map if needed
+    if "map" in quiz_state["answer_items"]:
+        draw_mini_map(quiz_answer_map_canvas, clickable=True)
+
+    # ── Build the answer fields ─────────────────────────────────────────────
+    # Clear old answer widgets
+    for widget in answer_area.winfo_children():
+        widget.destroy()
+
+    quiz_state["answer_widgets"] = {}  # key → (widget, correct_value)
+
+    for item in quiz_state["answer_items"]:
+        if item == "map":
+            continue  # handled by the clickable map canvas
+
+        row = tk.Frame(answer_area, bg=BG_DARK)
+        row.pack(fill="x", pady=3)
+
+        # Label for this answer field
+        if item == "name":
+            label_text = "State Name:"
+            correct = state_name
+        elif item == "initials":
+            label_text = "State Initials:"
+            correct = abbrev
+        elif item == "capital":
+            label_text = "Capital City:"
+            correct = capital
+
+        tk.Label(row, text=label_text, font=("Helvetica", 11),
+                 bg=BG_DARK, fg=TEXT_LIGHT, width=15, anchor="e").pack(side="left", padx=(0, 8))
+
+        method = quiz_state["answer_methods"].get(item, "type")
+
+        if method == "type":
+            # Text entry field
+            entry_var = tk.StringVar()
+            entry = tk.Entry(row, textvariable=entry_var, font=("Helvetica", 11),
+                             width=25, bg=TILE_DEFAULT, fg=TEXT_LIGHT,
+                             insertbackground=TEXT_LIGHT)
+            entry.pack(side="left")
+            # Bind Enter key to submit
+            entry.bind("<Return>", lambda e: submit_answer())
+            quiz_state["answer_widgets"][item] = (entry_var, correct, "type")
+
+        elif method == "dropdown":
+            # Dropdown with 6 options: 1 correct + 5 random wrong (no duplicates)
+            if item == "name":
+                all_options = list(states.keys())
+            elif item == "initials":
+                all_options = [s["abbreviation"] for s in states.values()]
+            elif item == "capital":
+                all_options = [s["capital"] for s in states.values()]
+
+            # Remove the correct answer, pick 5 unique wrong ones, add correct back
+            wrong_pool = [o for o in all_options if o != correct]
+            wrong_picks = random.sample(wrong_pool, min(5, len(wrong_pool)))
+            options = sorted(wrong_picks + [correct])
+
+            combo_var = tk.StringVar()
+            combo = ttk.Combobox(row, textvariable=combo_var, values=options,
+                                 state="readonly", width=23, font=("Helvetica", 10))
+            combo.pack(side="left")
+            quiz_state["answer_widgets"][item] = (combo_var, correct, "dropdown")
+
+    # Focus the first text entry if there is one
+    for widget in answer_area.winfo_children():
+        for child in widget.winfo_children():
+            if isinstance(child, tk.Entry):
+                child.focus_set()
+                break
+
+
+def submit_answer():
+    """Check the user's answers for the current card and move to the next."""
+    if not quiz_state.get("running"):
+        return
+
+    state_name = quiz_state["deck"][quiz_state["current_index"]]
+    info = states[state_name]
+    abbrev = info["abbreviation"]
+    correct_parts = []
+    wrong_parts = []
+
+    # Check non-map answers
+    for item, (var, correct, method) in quiz_state.get("answer_widgets", {}).items():
+        user_answer = var.get().strip()
+
+        if user_answer.lower() == correct.lower():
+            # Correct — award points based on method
+            if method == "type":
+                quiz_state["score"] += 2 / 6
+            else:
+                quiz_state["score"] += 1 / 6
+            correct_parts.append(item)
+        else:
+            wrong_parts.append(f"{item} (was: {correct})")
+
+    # Check map answer if applicable
+    map_correct = None
+    if "map" in quiz_state["answer_items"]:
+        user_map = map_answer_var.get()
+        if user_map == abbrev:
+            quiz_state["score"] += 1 / 6   # map click = multiple choice = 1/6
+            correct_parts.append("map")
+            map_correct = True
+        else:
+            wrong_parts.append(f"map (was: {state_name})")
+            map_correct = False
+
+    # Show brief feedback text
+    if wrong_parts:
+        feedback_var.set(f"Wrong: {', '.join(wrong_parts)}")
+    else:
+        feedback_var.set("Correct!")
+
+    # ── Visual map feedback ─────────────────────────────────────────────────
+    # On the prompt map: show the correct state in green or red
+    if "map" in quiz_state["prompt_items"]:
+        color = EMPHASIS_CORRECT if not wrong_parts else EMPHASIS_WRONG
+        emphasize_state(quiz_map_canvas, abbrev, color)
+
+    # On the answer map: show green on the correct state, red on wrong click
+    if map_correct is not None:
+        if map_correct:
+            # User clicked the right state — turn it green
+            emphasize_state(quiz_answer_map_canvas, abbrev, EMPHASIS_CORRECT)
+        else:
+            # User clicked wrong — turn their pick red, show correct in green
+            user_map = map_answer_var.get()
+            if user_map:
+                emphasize_state(quiz_answer_map_canvas, user_map, EMPHASIS_WRONG)
+            emphasize_state(quiz_answer_map_canvas, abbrev, EMPHASIS_CORRECT)
+
+    # Move to next card after a delay so user can see the feedback colors
+    quiz_state["current_index"] += 1
+    quiz_state["next_card_after_id"] = root.after(1200, show_card)
+
+
+def end_quiz():
+    """Stop the quiz and show results."""
+    if not quiz_state:
+        return
+
+    cancel_quiz_callbacks()
+    quiz_state["running"] = False
+    elapsed = time_module.time() - quiz_state.get("start_time", time_module.time())
+    quiz_state["elapsed"] = round(elapsed, 1)
+
+    # Restore the navigation bar
+    nav_frame.pack(fill="x", before=content_area)
+
+    # Switch to results view
+    quiz_frame.pack_forget()
+    show_results(save_current=True, show_summary=True, title_text="Quiz Complete!")
+
+
+# ── RESULTS / RANKINGS ──────────────────────────────────────────────────────
+# After the quiz ends, display the score and the top-10 leaderboard.
+# Rankings are saved to a file so they persist between sessions.
+
+import json as json_module
+import os
+
+RANKINGS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                             "rankings.json")
+
+
+def load_rankings():
+    """Load rankings from file, skipping malformed records instead of crashing."""
+    try:
+        with open(RANKINGS_FILE, "r") as f:
+            raw = json_module.load(f)
+    except (FileNotFoundError, json_module.JSONDecodeError):
+        return []
+
+    if not isinstance(raw, list):
+        return []
+
+    clean = []
+    for entry in raw:
+        if not isinstance(entry, dict):
+            continue
+        try:
+            initials = str(entry["initials"]).upper().strip()[:3]
+            score = float(entry["score"])
+            elapsed = float(entry["time"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if len(initials) != 3:
+            continue
+        clean.append({"initials": initials, "score": score, "time": elapsed})
+
+    clean.sort(key=lambda r: (-r["score"], r["time"]))
+    return clean[:10]
+
+
+def save_rankings(rankings):
+    """Save rankings list to file."""
+    with open(RANKINGS_FILE, "w") as f:
+        json_module.dump(rankings, f, indent=2)
+
+
+def show_results(save_current=True, show_summary=True, title_text="Quiz Complete!"):
+    """Display the leaderboard, optionally saving the current quiz result."""
+    settings_frame.pack_forget()
+    quiz_frame.pack_forget()
+    results_frame.pack(fill="both", expand=True)
+
+    # Clear old results widgets
+    for widget in results_frame.winfo_children():
+        widget.destroy()
+
+    score = round(quiz_state.get("score", 0), 2)
+    elapsed = quiz_state.get("elapsed", 0)
+    user_initials = quiz_state.get("initials", "???")
+
+    # Load existing rankings and optionally save this attempt
+    rankings = load_rankings()
+    if save_current and len(user_initials) == 3:
+        rankings.append({
+            "initials": user_initials,
+            "score": score,
+            "time": elapsed,
+        })
+    # Sort: highest score first, then shortest time for ties
+    rankings.sort(key=lambda r: (-r["score"], r["time"]))
+    rankings = rankings[:10]  # keep only top 10
+    save_rankings(rankings)
+
+    # Title
+    tk.Label(results_frame, text=title_text,
+             font=("Helvetica", 20, "bold"),
+             bg=BG_DARK, fg=TEXT_LIGHT).pack(pady=(20, 6))
+
+    # User's score (only shown after completing a quiz)
+    if show_summary:
+        tk.Label(results_frame,
+                 text=f"Score: {score:.2f}  |  Time: {elapsed:.1f}s  |  Player: {user_initials}",
+                 font=("Helvetica", 13), bg=BG_DARK, fg=ACCENT_GREEN).pack(pady=(0, 16))
+
+    # Top 10 leaderboard
+    tk.Label(results_frame, text="Top 10 Rankings",
+             font=("Helvetica", 15, "bold"),
+             bg=BG_DARK, fg=ACCENT_BLUE).pack(pady=(0, 6))
+
+    board = tk.Frame(results_frame, bg=BG_DARK)
+    board.pack(padx=40)
+
+    # Header row
+    for col, (text, w) in enumerate([("Rank", 6), ("Initials", 10),
+                                      ("Score", 10), ("Time", 10)]):
+        tk.Label(board, text=text, font=("Helvetica", 11, "bold"),
+                 bg=TILE_DEFAULT, fg=ACCENT_BLUE, width=w, anchor="center",
+                 padx=6, pady=4).grid(row=0, column=col, padx=1, pady=(0, 2))
+
+    # Show top 10
+    for i, entry in enumerate(rankings[:10], start=1):
+        row_bg = BG_DARK if i % 2 == 0 else BG_DARKER
+        for col, val in enumerate([str(i), entry["initials"],
+                                    f"{entry['score']:.2f}",
+                                    f"{entry['time']:.1f}s"]):
+            tk.Label(board, text=val, font=("Helvetica", 10),
+                     bg=row_bg, fg=TEXT_LIGHT, width=[6, 10, 10, 10][col],
+                     anchor="center", padx=6, pady=3
+                     ).grid(row=i, column=col, padx=1, pady=1)
+
+    # Button to go back to settings
+    tk.Button(results_frame, text="  Back to Settings  ",
+              command=show_settings,
+              bg=TILE_DEFAULT, fg=TEXT_LIGHT, font=("Helvetica", 12, "bold"),
+              relief="flat", cursor="hand2", padx=14, pady=4
+              ).pack(pady=(20, 10))
+
+
 # ── START ─────────────────────────────────────────────────────────────────────
-show_table()        # open on the table view by default
+show_map()          # open on the map view by default
 root.mainloop()     # hand control to tkinter; keeps the window open
