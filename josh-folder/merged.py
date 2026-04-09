@@ -1112,6 +1112,11 @@ def show_settings():
     quiz_frame.pack_forget()
     results_frame.pack_forget()
     settings_frame.pack(fill="both", expand=True)
+    flash_frame.tkraise()
+    for b in nav_buttons:
+        b.configure(bg=TILE_DEFAULT, fg=TEXT_LIGHT)
+    if nav_buttons:
+        flash_btn.configure(bg=ACCENT_BLUE, fg=BG_DARK)
 
 
 # ── SETTINGS UI ─────────────────────────────────────────────────────────────
@@ -1355,7 +1360,7 @@ submit_btn.pack(side="left", padx=8)
 
 end_btn = tk.Button(quiz_bottom, text="  End Session  ", font=("Helvetica", 12, "bold"),
                     bg="#f38ba8", fg=BG_DARK, relief="flat", cursor="hand2",
-                    padx=14, pady=4, command=lambda: end_quiz())
+                    padx=14, pady=4, command=lambda: confirm_end_session())
 end_btn.pack(side="left", padx=8)
 
 
@@ -1857,6 +1862,40 @@ def submit_answer():
     # Move to next card after a delay so user can see the feedback colors
     quiz_state["current_index"] += 1
     quiz_state["next_card_after_id"] = root.after(1200, show_card)
+
+
+def confirm_end_session():
+    """Show an in-app confirmation overlay before ending the quiz."""
+    overlay = tk.Toplevel(root)
+    overlay.title("")
+    overlay.resizable(False, False)
+    overlay.grab_set()  # block interaction with main window until dismissed
+
+    # Center over the main window
+    root.update_idletasks()
+    x = root.winfo_x() + root.winfo_width() // 2 - 200
+    y = root.winfo_y() + root.winfo_height() // 2 - 75
+    overlay.geometry(f"400x150+{x}+{y}")
+    overlay.configure(bg=BG_DARK)
+
+    tk.Label(overlay, text="Are you sure you want to exit this quiz?",
+             font=("Helvetica", 13, "bold"), bg=BG_DARK, fg=TEXT_LIGHT,
+             wraplength=360).pack(pady=(28, 18))
+
+    btn_row = tk.Frame(overlay, bg=BG_DARK)
+    btn_row.pack()
+
+    tk.Button(btn_row, text="  Yes, end session  ",
+              font=("Helvetica", 11, "bold"), bg="#f38ba8", fg=BG_DARK,
+              relief="flat", cursor="hand2", padx=12, pady=5,
+              command=lambda: [overlay.destroy(), end_quiz()]
+              ).pack(side="left", padx=10)
+
+    tk.Button(btn_row, text="  No, resume quiz  ",
+              font=("Helvetica", 11, "bold"), bg=TILE_DEFAULT, fg=TEXT_LIGHT,
+              relief="flat", cursor="hand2", padx=12, pady=5,
+              command=overlay.destroy
+              ).pack(side="left", padx=10)
 
 
 def end_quiz():
