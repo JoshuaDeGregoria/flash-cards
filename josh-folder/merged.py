@@ -1150,14 +1150,14 @@ tk.Label(settings_frame, text="Choose a role for each item:",
 
 # Description labels so the user understands each option
 desc_frame = tk.Frame(settings_frame, bg=BG_DARK)
-desc_frame.pack(padx=30, pady=(0, 8), anchor="w")
+desc_frame.pack(padx=30, pady=(0, 8))
 
 tk.Label(desc_frame, text="Show as clue — information displayed for each question",
-         font=("Helvetica", 9), bg=BG_DARK, fg=TEXT_DIM).pack(anchor="w")
+         font=("Helvetica", 9), bg=BG_DARK, fg=TEXT_LIGHT).pack(anchor="center")
 tk.Label(desc_frame, text="Answer — what you will be quizzed on and have to enter/select",
-         font=("Helvetica", 9), bg=BG_DARK, fg=TEXT_DIM).pack(anchor="w")
+         font=("Helvetica", 9), bg=BG_DARK, fg=TEXT_LIGHT).pack(anchor="center")
 tk.Label(desc_frame, text="Text entry earns 2/6 pts  |  Multiple choice earns 1/6 pt",
-         font=("Helvetica", 9), bg=BG_DARK, fg=TEXT_DIM).pack(anchor="w")
+         font=("Helvetica", 9), bg=BG_DARK, fg=TEXT_LIGHT).pack(anchor="center")
 
 # One row per item, each with a dropdown to pick its role.
 # Map Location can only be "Show as clue", "Answer (click map)", or "Don't use".
