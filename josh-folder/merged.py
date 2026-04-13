@@ -1303,6 +1303,13 @@ def cancel_quiz_callbacks():
             quiz_state[key] = None  # clear the stored callback ID
 
 
+def points_for_method(method):
+    """Return the number of raw points awarded for one answer method."""
+    if method == "type":  # typed answers are worth more than assisted ones
+        return 2 / 6  # typed responses earn two point units
+    return 1 / 6  # dropdown and map-click answers earn one point unit
+
+
 # ── Quiz UI widgets (created once, updated each card) ───────────────────────
 
 # Top bar: timer + card counter
@@ -1622,6 +1629,7 @@ def launch_quiz(user_initials, prompt_items, answer_items, answer_methods):
     # Shuffle all 50 states into a random order
     all_states = list(states.keys())  # copy the state names into a quiz deck
     random.shuffle(all_states)  # randomize the quiz order
+    points_per_card = sum(points_for_method(method) for method in answer_methods.values())  # compute the max raw score each card can award
 
     quiz_state.clear()  # remove any prior quiz-session data
     quiz_state.update({  # seed the state dictionary for the new session
@@ -1633,6 +1641,7 @@ def launch_quiz(user_initials, prompt_items, answer_items, answer_methods):
         "deck":           all_states,       # shuffled list of state names
         "current_index":  0,                # which card we're on
         "score":          0.0,              # running score
+        "max_score":      len(all_states) * points_per_card,  # maximum raw score available in this configuration
         "start_time":     time_module.time(),
         "timer_after_id":     None,          # tracks scheduled timer callback
         "next_card_after_id": None,          # tracks scheduled next-card callback
@@ -1815,10 +1824,7 @@ def submit_answer():
 
         if user_answer.lower() == correct.lower():  # compare case-insensitively
             # Correct — award points based on method
-            if method == "type":
-                quiz_state["score"] += 2 / 6  # typed answers are worth more points
-            else:
-                quiz_state["score"] += 1 / 6  # dropdown answers get one point unit
+            quiz_state["score"] += points_for_method(method)  # award the configured raw points for this answer method
             correct_parts.append(item)  # record the correct answer part
         else:
             wrong_parts.append(f"{item} (was: {correct})")  # record the missed answer
@@ -1828,7 +1834,7 @@ def submit_answer():
     if "map" in quiz_state["answer_items"]:  # only score the map when configured
         user_map = map_answer_var.get()  # read the selected map answer
         if user_map == abbrev:  # award credit when the selected state matches
-            quiz_state["score"] += 1 / 6   # map click = multiple choice = 1/6
+            quiz_state["score"] += points_for_method("click")  # map clicks score like multiple-choice answers
             correct_parts.append("map")  # record the correct map response
             map_correct = True  # note that the map answer was correct
         else:
@@ -1950,9 +1956,27 @@ def load_rankings():
             continue  # skip entries with missing or invalid fields
         if len(initials) != 3:  # require three-letter initials
             continue  # ignore malformed initials
-        clean.append({"initials": initials, "score": score, "time": elapsed})  # keep the validated record
+        percent_score = entry.get("percent_score")  # read the normalized score when present
+        max_score = entry.get("max_score")  # read the stored per-session max score when present
+        legacy_entry = False  # track whether this row predates normalized scoring
+        try:
+            percent_score = float(percent_score) if percent_score is not None else None  # normalize the percentage when present
+            max_score = float(max_score) if max_score is not None else None  # normalize the max score when present
+        except (TypeError, ValueError):
+            percent_score = None  # treat malformed normalized scores as missing
+            max_score = None  # treat malformed max scores as missing
+        if percent_score is None:  # old leaderboard rows only stored raw points
+            legacy_entry = True  # mark the row as incomparable to normalized runs
+        clean.append({  # keep the validated record
+            "initials": initials,
+            "score": score,
+            "time": elapsed,
+            "percent_score": percent_score,
+            "max_score": max_score,
+            "legacy": legacy_entry,
+        })
 
-    clean.sort(key=lambda r: (-r["score"], r["time"]))  # rank by score descending, then time ascending
+    clean.sort(key=lambda r: (r["legacy"], -(r["percent_score"] or 0.0), -r["score"], r["time"]))  # rank normalized rows first, then legacy rows
     return clean[:10]  # keep only the top ten records
 
 
@@ -1973,6 +1997,8 @@ def show_results(save_current=True, show_summary=True, title_text="Quiz Complete
         widget.destroy()  # fully destroy the old widget
 
     score = round(quiz_state.get("score", 0), 2)  # round the stored quiz score
+    max_score = round(quiz_state.get("max_score", 0), 2)  # round the stored maximum raw score
+    percent_score = 0.0 if max_score <= 0 else round((score / max_score) * 100, 2)  # convert raw score into a normalized percentage
     elapsed = quiz_state.get("elapsed", 0)  # read the stored elapsed time
     user_initials = quiz_state.get("initials", "???")  # read the player's initials
 
@@ -1982,10 +2008,13 @@ def show_results(save_current=True, show_summary=True, title_text="Quiz Complete
         rankings.append({
             "initials": user_initials,
             "score": score,
+            "max_score": max_score,
+            "percent_score": percent_score,
             "time": elapsed,
+            "legacy": False,
         })  # add the current result to the ranking pool
-    # Sort: highest score first, then shortest time for ties
-    rankings.sort(key=lambda r: (-r["score"], r["time"]))  # rank by score descending, then time ascending
+    # Sort: normalized runs first, then highest percent, then raw score, then shortest time
+    rankings.sort(key=lambda r: (r.get("legacy", False), -(r.get("percent_score") or 0.0), -r["score"], r["time"]))  # rank normalized rows first and legacy rows last
     rankings = rankings[:10]  # keep only top 10
     save_rankings(rankings)  # persist the updated leaderboard
 
@@ -1997,7 +2026,7 @@ def show_results(save_current=True, show_summary=True, title_text="Quiz Complete
     # User's score (only shown after completing a quiz)
     if show_summary:  # only show personal results after a completed quiz
         tk.Label(results_frame,
-                 text=f"Score: {score:.2f}  |  Time: {elapsed:.1f}s  |  Player: {user_initials}",
+                 text=f"Score: {percent_score:.2f}%  |  Raw: {score:.2f} / {max_score:.2f} pts  |  Time: {elapsed:.1f}s  |  Player: {user_initials}",
                  font=("Helvetica", 13), bg=BG_DARK, fg=ACCENT_GREEN).pack(pady=(0, 16))
 
     # Top 10 leaderboard
@@ -2010,7 +2039,7 @@ def show_results(save_current=True, show_summary=True, title_text="Quiz Complete
 
     # Header row
     for col, (text, w) in enumerate([("Rank", 6), ("Initials", 10),
-                                      ("Score", 10), ("Time", 10)]):  # define each leaderboard column and its width
+                                      ("Score", 16), ("Time", 10)]):  # define each leaderboard column and its width
         tk.Label(board, text=text, font=("Helvetica", 11, "bold"),
                  bg=TILE_DEFAULT, fg=ACCENT_BLUE, width=w, anchor="center",
                  padx=6, pady=4).grid(row=0, column=col, padx=1, pady=(0, 2))  # place one header cell in the top row
@@ -2018,13 +2047,23 @@ def show_results(save_current=True, show_summary=True, title_text="Quiz Complete
     # Show top 10
     for i, entry in enumerate(rankings[:10], start=1):  # render each leaderboard row
         row_bg = BG_DARK if i % 2 == 0 else BG_DARKER  # alternate row colors for readability
+        if entry.get("legacy"):  # keep older raw-score rows readable without mislabeling them as percentages
+            score_text = f"Legacy {entry['score']:.2f} pts"  # identify pre-normalization rows clearly
+        else:
+            score_text = f"{entry['percent_score']:.2f}%"  # display normalized score for comparable rows
         for col, val in enumerate([str(i), entry["initials"],  # render each displayed value in the row
-                                    f"{entry['score']:.2f}",
+                                    score_text,
                                     f"{entry['time']:.1f}s"]):  # build the visible values for this leaderboard row
             tk.Label(board, text=val, font=("Helvetica", 10),
-                     bg=row_bg, fg=TEXT_LIGHT, width=[6, 10, 10, 10][col],
+                     bg=row_bg, fg=TEXT_LIGHT, width=[6, 10, 16, 10][col],
                      anchor="center", padx=6, pady=3
                      ).grid(row=i, column=col, padx=1, pady=1)  # place one value cell in the current leaderboard row
+
+    if any(entry.get("legacy") for entry in rankings):  # explain why older rows look different on mixed leaderboards
+        tk.Label(results_frame,
+                 text="Legacy rows were saved before normalized scoring and are shown after percentage-ranked results.",
+                 font=("Helvetica", 9), bg=BG_DARK, fg=TEXT_DIM, wraplength=700, justify="center"
+                 ).pack(pady=(10, 0))
 
     # Button to go back to settings
     tk.Button(results_frame, text="  Back to Settings  ",
