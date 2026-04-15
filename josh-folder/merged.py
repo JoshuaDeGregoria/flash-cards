@@ -1,20 +1,6 @@
 import tkinter as tk        # the main GUI library — windows, buttons, canvas, etc.
 from tkinter import ttk    # "Themed Tkinter" — a submodule with nicer-looking widgets (we use it for the scrollbar)
 
-# =============================================================================
-#  US STATE CAPITALS — Flash Card App 
-# =============================================================================
-#  Two views:
-#    Table  →  scrollable list of every state, abbreviation, and capital
-#    Map    →  clickable outline map of the US; click a state to see details
-#
-#  This version uses real cartographic polygon coordinates extracted from
-#  a public GeoJSON dataset. Neighboring states share exact border points,
-#  so all borders are perfectly flush with no gaps or overlaps.
-#  Requires: Python 3 (standard library only — no pip installs)
-# =============================================================================
-
-
 # ── STATE DATA ────────────────────────────────────────────────────────────────
 # Dictionary keyed by full state name.
 # Each value holds the capital city and the 2-letter abbreviation.
@@ -88,7 +74,7 @@ abbrev_to_name = {info["abbreviation"]: name for name, info in states.items()}
 #   • Longitude: negative numbers, larger magnitude = further west
 #   • Latitude:  positive numbers, larger = further north
 #
-# Michigan is a special case — it has two separate land masses
+# Michigan is a special case — it has two separate land masses so I did that seperately. 
 # (upper and lower peninsula), so its value is a LIST of two point-lists.
 #
 # Alaska and Hawaii are stored separately below because they need
